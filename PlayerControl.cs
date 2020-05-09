@@ -128,6 +128,23 @@ public class PlayerControl : MonoBehaviour
     private float frameInitTime = 0.0f;
     Coroutine FrameCoroutine;
 
+    //climb
+    public Transform ledgeCheck;
+    private bool isTouchingLedge;
+    [SerializeField]
+    private bool canClimbLedge = false;
+    [SerializeField]
+    private bool ledgeDetected;
+
+    private Vector2 ledgePosBot;
+    private Vector2 ledgePos1;
+    private Vector2 ledgePos2;
+
+    public float ledgeClimbXOffset1 = 0f;
+    public float ledgeClimbYOffset1 = 0f;
+    public float ledgeClimbXOffset2 = 0f;
+    public float ledgeClimbYOffset2 = 0f;
+
     private void Start()
     {
         //reCheckPoint = GetComponent<CheckPoint>();
@@ -159,6 +176,8 @@ public class PlayerControl : MonoBehaviour
         CheckIfCanJump();
         CheckIfWallsliding();
 
+        CheckLedgeClimb();
+
         //레이 테스트
         MoveLayer();
         InitializeLight();
@@ -169,6 +188,42 @@ public class PlayerControl : MonoBehaviour
         ApplyMovement();
         CheckSurrounding();
         SlopeCheck();//물리적 영역이라 이곳에 넣는 것 같다.
+    }
+
+    private void CheckLedgeClimb()
+    {
+        if (ledgeDetected && !canClimbLedge)
+        {
+            canClimbLedge = true;
+            if (isFacingRight)
+            {//floor 는 정수값으로 내림하는 함수
+                ledgePos1 = new Vector2(Mathf.Floor(ledgePosBot.x + wallCheckDistance) - ledgeClimbXOffset1, Mathf.Floor(ledgePosBot.y) + ledgeClimbYOffset1);//x로 wallCheckdirection만큼 오른쪽, ledgeClimb만큼 왼쪽. ledgeclimb만큼 위로 
+                ledgePos2 = new Vector2(Mathf.Floor(ledgePosBot.x + wallCheckDistance) + ledgeClimbXOffset2, Mathf.Floor(ledgePosBot.y) + ledgeClimbYOffset2);
+            }
+            else
+            {//ceil는 정수값으로 올림하는 함수
+                ledgePos1 = new Vector2(Mathf.Ceil(ledgePosBot.x - wallCheckDistance) + ledgeClimbXOffset1, Mathf.Floor(ledgePosBot.y) + ledgeClimbYOffset1);
+                ledgePos2 = new Vector2(Mathf.Ceil(ledgePosBot.x - wallCheckDistance) - ledgeClimbXOffset2, Mathf.Floor(ledgePosBot.y) + ledgeClimbYOffset2);
+            }
+
+            anim.SetBool("canClimbLedge", canClimbLedge);
+            Debug.Log("애니메이션 작동");
+        }
+        if (canClimbLedge)
+        {
+            transform.position = ledgePos1;
+            Debug.Log("ledgePos1");
+        }
+    }
+
+    public void FinishLedgeClimb()
+    {
+        canClimbLedge = false;
+        transform.position = ledgePos2;
+        Debug.Log("정상");
+        ledgeDetected = false;
+        anim.SetBool("canClimbLedge", canClimbLedge);
+
     }
 
     public void setRGBA(float color)
@@ -851,12 +906,18 @@ public class PlayerControl : MonoBehaviour
 
     private void CheckSurrounding()
     {
+        isBottomWall = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, WhatIsBottom);
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, WhatIsGround);
 
         isTouchingWall = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, WhatIsGround);
+        isTouchingLedge = Physics2D.Raycast(ledgeCheck.position, transform.right, wallCheckDistance, WhatIsGround);
 
         isOverlapRect = Physics2D.Raycast(OverlapCheck.position, transform.right, OverlapCheckDistance, WhatIsOverlap);
-        isBottomWall = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, WhatIsBottom);
+        if (isTouchingWall && !isTouchingLedge && !ledgeDetected)
+        {
+            ledgeDetected = true;
+            ledgePosBot = wallCheck.position;
+        }
 
     }
 
@@ -864,50 +925,21 @@ public class PlayerControl : MonoBehaviour
     {
         if (canJump && !isWallSliding)
         {
-            rb.velocity = new Vector2(rb.velocity.x, JumpForce);//점프 최대값.
-            isJumping = true;// if(canJump) is jump = true....추후 변경
-                             //rb.velocity = new Vector2(rb.velocity.x, JumpForce * Physics2D.gravity.y * Time.deltaTime);
+            rb.velocity = new Vector2(rb.velocity.x, JumpForce);
+            //rb.velocity = new Vector2(rb.velocity.x, JumpForce * Physics2D.gravity.y * Time.deltaTime);
             amountOfJumpsLeft--;
+            Debug.Log("평지점프");
         }
-        /*
-        else if (isWallSliding && movementInputDirection == 0 && canJump)//wall hop
+        else if ((isWallSliding || isTouchingWall) && canJump)
         {
+            if (isFacingRight) movementInputDirection = -1;
+            else if (!isFacingRight) movementInputDirection = 1;//자동 방향 전환
             isWallSliding = false;
-            isJumping = true;// if(canJump) is jump = true....추후 변경
-            amountOfJumpsLeft--;
-            Vector2 forceToAdd = new Vector2(wallHopForce * wallHopDirection.x * -facingDirection, wallHopForce * wallHopDirection.y);
-            rb.AddForce(forceToAdd, ForceMode2D.Impulse);
-            Debug.Log("Test1");
-
-        }*/
-        else if (isWallSliding && movementInputDirection == 0 && canJump)//wall hop
-        {
-            float dir;
-            if (isFacingRight)
-            {
-                dir = Vector2.right.x;
-            }
-            else
-            {
-                dir = Vector2.left.x;
-            }
-            isWallSliding = false;
-            isJumping = true;// if(canJump) is jump = true....추후 변경
-            amountOfJumpsLeft--; 
-            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * dir, wallJumpForce * wallJumpDirection.y);
-            rb.AddForce(forceToAdd, ForceMode2D.Impulse);
-            Debug.Log("Test1");
-
-        }
-
-        else if ((isWallSliding || isTouchingWall) && movementInputDirection != 0 && canJump)
-        {
-            isWallSliding = false;
-            isJumping = true;// if(canJump) is jump = true....추후 변경
             amountOfJumpsLeft--;
             Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
             rb.AddForce(forceToAdd, ForceMode2D.Impulse);
-            Debug.Log("Test2");
+            Debug.Log("벽점프");
+
         }
     }
     private void ApplyMovement()
