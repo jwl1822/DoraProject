@@ -15,6 +15,10 @@ public class PlayerControl : MonoBehaviour
     private bool isTouchingWall;
     private bool isWallSliding;
     private bool isOverlapRect;
+    private bool isNpc;
+    private bool nowTalk;
+
+
     private Rigidbody2D rb;
 
     private Animator anim;
@@ -65,6 +69,7 @@ public class PlayerControl : MonoBehaviour
     public LayerMask WhatIsGround;
     public LayerMask WhatIsOverlap;
     public LayerMask WhatIsBottom;
+    public LayerMask WhatIsNPC;
 
     public GameObject Target;
     public GameObject layerMask;
@@ -78,7 +83,7 @@ public class PlayerControl : MonoBehaviour
     private float FrameSizeX;
     private float FrameSizeY;
 
-    public CheckPoint reCheckPoint;
+    public GameObject reCheckPoint;
 
 
     //바뀐요소
@@ -145,6 +150,10 @@ public class PlayerControl : MonoBehaviour
     public float ledgeClimbXOffset2 = 0f;
     public float ledgeClimbYOffset2 = 0f;
 
+    NpcSentence npcChat = null;         //대화 중복실행을 방지하는 것
+    [SerializeField]
+    CheckPoint checkPoint;
+
     private void Start()
     {
         //reCheckPoint = GetComponent<CheckPoint>();
@@ -189,7 +198,39 @@ public class PlayerControl : MonoBehaviour
         CheckSurrounding();
         SlopeCheck();//물리적 영역이라 이곳에 넣는 것 같다.
     }
+    //체크포인트와 충돌시 체크포인트 지점 변경.
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision.tag == "CheckPoint")
+        {
+            reCheckPoint =  collision.gameObject;
+            checkPoint = collision.GetComponent<CheckPoint>().GetCheckPoint();
+        }
+    }
 
+    public void GoToCheckPoint()
+    {
+        sprite.color = new Color(0, 0, 0, 0);
+        checkPoint.vCamCall();
+    }
+
+        public bool getIsNpc()
+    {
+        return isNpc;
+    }
+    public void resetnpcChat()
+    {
+        npcChat = null;
+    }
+
+    public bool getNowTalk()
+    {
+        return nowTalk;
+    }
+    public void setNowTalk(bool set)
+    {
+        nowTalk = set;
+    }
     private void CheckLedgeClimb()
     {
         if (ledgeDetected && !canClimbLedge)
@@ -241,11 +282,12 @@ public class PlayerControl : MonoBehaviour
         rb.gravityScale = 0;
         Invoke("GoToCheckPoint", 1f);
     }
-    public void GoToCheckPoint()
+    /*
+    public void setCheckPoint(Transform trans)
     {
-        sprite.color = new Color(0, 0, 0, 0);
-        reCheckPoint.vCamCall();
+        reCheckPoint = trans;
     }
+*/
 
     IEnumerator OneSecondCount()
     {
@@ -895,6 +937,33 @@ public class PlayerControl : MonoBehaviour
                 isMoveWall = true;
             }
         }
+        if (Input.GetKeyDown(KeyCode.W)) 
+        {
+            isNpc = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, WhatIsNPC);
+
+            if (isNpc)
+            {
+                //NPC충돌한것 확인 후 맞으면 충돌한 npc안의 대화실행.
+                RaycastHit2D hit = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, WhatIsNPC);
+                if (hit.collider != null && npcChat == null&&!nowTalk)       //npc와 충돌했고 첫 대화라면
+                {
+                    npcChat = hit.collider.gameObject.GetComponent<NpcSentence>();
+                    npcChat.TalkNpc();
+                    nowTalk = true;
+                }else if (hit.collider != null && npcChat != null&&nowTalk)  //npc와 충돌했고 대화중이며 첫대화가 아니라면
+                {
+                    Debug.Log("아직 대화중");
+                }
+                else
+                {
+                    Target = null;
+                }
+            }
+        }
+        if (Input.GetKeyUp(KeyCode.W))
+        {
+            isNpc = false;
+        }
     }
     private void UpdateAnimations()
     {
@@ -919,6 +988,7 @@ public class PlayerControl : MonoBehaviour
             ledgePosBot = wallCheck.position;
         }
 
+
     }
 
     private void Jump()
@@ -926,6 +996,7 @@ public class PlayerControl : MonoBehaviour
         if (canJump && !isWallSliding)
         {
             rb.velocity = new Vector2(rb.velocity.x, JumpForce);
+            isJumping = true;
             //rb.velocity = new Vector2(rb.velocity.x, JumpForce * Physics2D.gravity.y * Time.deltaTime);
             amountOfJumpsLeft--;
             Debug.Log("평지점프");
@@ -934,6 +1005,7 @@ public class PlayerControl : MonoBehaviour
         {
             if (isFacingRight) movementInputDirection = -1;
             else if (!isFacingRight) movementInputDirection = 1;//자동 방향 전환
+            isJumping = true;
             isWallSliding = false;
             amountOfJumpsLeft--;
             Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
@@ -993,4 +1065,5 @@ public class PlayerControl : MonoBehaviour
 
         Gizmos.DrawLine(OverlapCheck.position, new Vector3(OverlapCheck.position.x + OverlapCheckDistance, OverlapCheck.position.y + 0.7f, OverlapCheck.position.z));
     }
+
 }
