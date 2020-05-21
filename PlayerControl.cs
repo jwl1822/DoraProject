@@ -15,6 +15,10 @@ public class PlayerControl : MonoBehaviour
     private bool isTouchingWall;
     private bool isWallSliding;
     private bool isOverlapRect;
+    private bool isNpc;
+    private bool nowTalk;
+
+
     private Rigidbody2D rb;
 
     private Animator anim;
@@ -65,6 +69,7 @@ public class PlayerControl : MonoBehaviour
     public LayerMask WhatIsGround;
     public LayerMask WhatIsOverlap;
     public LayerMask WhatIsBottom;
+    public LayerMask WhatIsNPC;
 
     public GameObject Target;
     public GameObject layerMask;
@@ -78,7 +83,7 @@ public class PlayerControl : MonoBehaviour
     private float FrameSizeX;
     private float FrameSizeY;
 
-    public CheckPoint reCheckPoint;
+    public GameObject reCheckPoint;
 
 
     //바뀐요소
@@ -106,6 +111,7 @@ public class PlayerControl : MonoBehaviour
     public PhysicsMaterial2D fullFriction;//경사에서 캐릭터가 미끄러지지 않도록
 
     private bool isOnSlope;//경사에 있는 중인지 확인
+    [SerializeField]
     private bool isJumping;//점프하는 중인지 확인
     private bool canWalkOnSlope;
     private bool isHit;
@@ -144,6 +150,15 @@ public class PlayerControl : MonoBehaviour
     public float ledgeClimbYOffset1 = 0f;
     public float ledgeClimbXOffset2 = 0f;
     public float ledgeClimbYOffset2 = 0f;
+
+    NpcSentence npcChat = null;         //대화 중복실행을 방지하는 것
+    [SerializeField]
+    CheckPoint checkPoint;
+
+    //jump fixed
+    //public float touchingWallJumpForce;
+
+    public bool canCoyoteJump = false;
 
     private void Start()
     {
@@ -189,7 +204,42 @@ public class PlayerControl : MonoBehaviour
         CheckSurrounding();
         SlopeCheck();//물리적 영역이라 이곳에 넣는 것 같다.
     }
+    //체크포인트와 충돌시 체크포인트 지점 변경.
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision.tag == "CheckPoint")
+        {
+            reCheckPoint =  collision.gameObject;
+            checkPoint = collision.GetComponent<CheckPoint>().GetCheckPoint();
+        }
+    }
+    public bool getIsJump()
+    {
+        return isJumping;
+    }
+    public void GoToCheckPoint()
+    {
+        sprite.color = new Color(0, 0, 0, 0);
+        checkPoint.vCamCall();
+    }
 
+        public bool getIsNpc()
+    {
+        return isNpc;
+    }
+    public void resetnpcChat()
+    {
+        npcChat = null;
+    }
+
+    public bool getNowTalk()
+    {
+        return nowTalk;
+    }
+    public void setNowTalk(bool set)
+    {
+        nowTalk = set;
+    }
     private void CheckLedgeClimb()
     {
         if (ledgeDetected && !canClimbLedge)
@@ -241,11 +291,12 @@ public class PlayerControl : MonoBehaviour
         rb.gravityScale = 0;
         Invoke("GoToCheckPoint", 1f);
     }
-    public void GoToCheckPoint()
+    /*
+    public void setCheckPoint(Transform trans)
     {
-        sprite.color = new Color(0, 0, 0, 0);
-        reCheckPoint.vCamCall();
+        reCheckPoint = trans;
     }
+*/
 
     IEnumerator OneSecondCount()
     {
@@ -729,6 +780,10 @@ public class PlayerControl : MonoBehaviour
         {
             isJumping = false;
         }
+        if (isGrounded)
+        {
+            canCoyoteJump = true;
+        }
         if (isGrounded && !isJumping)//이부분 제어하면 좋은데 약간 버벅거리는 오류 남. && slopeDownAngle <= maxSlopeAngle) //땅 위에 가만히 있으면서 바닥과 캐릭터의 각도가 max각도보다 작을때. 
         {//오류 고치지 못하면 반복되기 때문에 지워도 ㄱㅊ을듯
             canJump = true;
@@ -774,22 +829,31 @@ public class PlayerControl : MonoBehaviour
 
     private void CoyoteJump()
     {
-        if (!isGrounded)//땅에 있지 않을 때
+        if (!isGrounded)//점프하는 중이 아닐때
         {
-            if (coyote_counter > 0)//카운터가 0이 아니면서
+            if (canCoyoteJump)
             {
-                coyote_counter -= 1;
-
-                if (!canJump)
+                if (!isJumping) 
                 {
-                    if (Input.GetButtonDown("Jump"))//점프 버튼을 누른다면
+                    if (coyote_counter > 0)//카운터가 0이 아니면서
                     {
-                        canJump = true;
-                        Jump();//점프하시오
+                        coyote_counter -= 1;
+
+                        if (!canJump)
+                        {
+                            //Debug.Log(4);
+                            if (Input.GetButtonDown("Jump"))//점프 버튼을 누른다면
+                            {
+                                canCoyoteJump = false;
+                                //Debug.Log(5);
+                                canJump = true;
+                                Jump();//점프하시오
+                            }
+                        }
                     }
                 }
-
             }
+            
         }
         else
         {
@@ -802,14 +866,16 @@ public class PlayerControl : MonoBehaviour
     {
         if (Input.GetButtonDown("Jump"))
         {
+            canCoyoteJump = false;
             buffer_counter = buffer_max;//점프 버튼 눌리면 초기화함
-            Debug.Log(buffer_counter);
+            //Debug.Log(buffer_counter);
         }
 
         if (buffer_counter > 0)//떨어지고 있는 중,,,
         {
+            canCoyoteJump = false;
             buffer_counter -= 1;
-            Debug.Log(buffer_counter);
+            //Debug.Log(buffer_counter);
 
             if (isGrounded)//땅에 닿자마자 점프
             {
@@ -827,6 +893,7 @@ public class PlayerControl : MonoBehaviour
 
         if (Input.GetButtonDown("Jump"))
         {
+            canCoyoteJump = false;
             Jump();
         }
         if (Input.GetButtonUp("Jump"))
@@ -862,9 +929,25 @@ public class PlayerControl : MonoBehaviour
                 }
             }
         }
+        if (Input.GetKey(KeyCode.LeftControl))
+        {
+            if (isWalking || isJumping || isWallSliding)
+            {
+                isWallOn = true;
+                isChangeWallOn = false;
+            }
+        }
         if (Input.GetKeyUp(KeyCode.LeftControl))
         {
-            isWallOn = true;
+            if (isGrounded)
+            {
+                isWallOn = true;
+            }
+            else
+            {
+                isWallOn = false;
+            }
+
             if (isChangeWallOn == true)
             {
                 isChangeWallOn = false;
@@ -895,6 +978,33 @@ public class PlayerControl : MonoBehaviour
                 isMoveWall = true;
             }
         }
+        if (Input.GetKeyDown(KeyCode.W)) 
+        {
+            isNpc = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, WhatIsNPC);
+          
+            if (isNpc)
+            {
+                //NPC충돌한것 확인 후 맞으면 충돌한 npc안의 대화실행.
+                RaycastHit2D hit = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, WhatIsNPC);
+                if (hit.collider != null && npcChat == null&&!nowTalk)       //npc와 충돌했고 첫 대화라면
+                {
+                    npcChat = hit.collider.gameObject.GetComponent<NpcSentence>();
+                    npcChat.TalkNpc();
+                    nowTalk = true;
+                }else if (hit.collider != null && npcChat != null&&nowTalk)  //npc와 충돌했고 대화중이며 첫대화가 아니라면
+                {
+                    Debug.Log("아직 대화중");
+                }
+                else
+                {
+                    Target = null;
+                }
+            }
+        }
+        if (Input.GetKeyUp(KeyCode.W))
+        {
+            isNpc = false;
+        }
     }
     private void UpdateAnimations()
     {
@@ -913,27 +1023,42 @@ public class PlayerControl : MonoBehaviour
         isTouchingLedge = Physics2D.Raycast(ledgeCheck.position, transform.right, wallCheckDistance, WhatIsGround);
 
         isOverlapRect = Physics2D.Raycast(OverlapCheck.position, transform.right, OverlapCheckDistance, WhatIsOverlap);
-        if (isTouchingWall && !isTouchingLedge && !ledgeDetected)
+        if (isTouchingWall && !isTouchingLedge && !ledgeDetected && !isJumping)
         {
             ledgeDetected = true;
             ledgePosBot = wallCheck.position;
         }
 
+
     }
 
-    private void Jump()
+    /*private void Jump()
     {
-        if (canJump && !isWallSliding)
+        if (canJump && !isWallSliding && !isTouchingWall)
         {
             rb.velocity = new Vector2(rb.velocity.x, JumpForce);
+            isJumping = true;// if(canJump) is jump = true....추후 변경
             //rb.velocity = new Vector2(rb.velocity.x, JumpForce * Physics2D.gravity.y * Time.deltaTime);
             amountOfJumpsLeft--;
             Debug.Log("평지점프");
+        }
+        else if (isTouchingWall && !isWallSliding && canJump)
+        {
+            if (isFacingRight) movementInputDirection = -1;
+            else if (!isFacingRight) movementInputDirection = 1;//자동 방향 전환
+            isJumping = true;// if(canJump) is jump = true....추후 변경
+            isWallSliding = false;
+            amountOfJumpsLeft--;
+            Vector2 forceToAdd = new Vector2(touchingWallJumpForce * wallJumpDirection.x * movementInputDirection, touchingWallJumpForce * wallJumpDirection.y);
+            rb.AddForce(forceToAdd, ForceMode2D.Impulse);
+            Debug.Log("벽점프");
+
         }
         else if ((isWallSliding || isTouchingWall) && canJump)
         {
             if (isFacingRight) movementInputDirection = -1;
             else if (!isFacingRight) movementInputDirection = 1;//자동 방향 전환
+            isJumping = true;// if(canJump) is jump = true....추후 변경
             isWallSliding = false;
             amountOfJumpsLeft--;
             Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
@@ -941,7 +1066,28 @@ public class PlayerControl : MonoBehaviour
             Debug.Log("벽점프");
 
         }
+    }*/
+    private void Jump()
+    {
+        if (canJump && !isWallSliding)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, JumpForce);
+            isJumping = true;
+            //rb.velocity = new Vector2(rb.velocity.x, JumpForce * Physics2D.gravity.y * Time.deltaTime);
+            amountOfJumpsLeft--;
+        }
+        else if ((isWallSliding || isTouchingWall) && canJump)
+        {
+            if (isFacingRight) movementInputDirection = -1;
+            else if (!isFacingRight) movementInputDirection = 1;//자동 방향 전환
+            isJumping = true;
+            isWallSliding = false;
+            amountOfJumpsLeft--;
+            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
+            rb.AddForce(forceToAdd, ForceMode2D.Impulse);
+        }
     }
+
     private void ApplyMovement()
     {
         if (isGrounded && !isOnSlope && !isJumping)//평지 위에 가만히
@@ -993,4 +1139,5 @@ public class PlayerControl : MonoBehaviour
 
         Gizmos.DrawLine(OverlapCheck.position, new Vector3(OverlapCheck.position.x + OverlapCheckDistance, OverlapCheck.position.y + 0.7f, OverlapCheck.position.z));
     }
+
 }

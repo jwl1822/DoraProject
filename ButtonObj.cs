@@ -31,7 +31,7 @@ public class Button : Obj
         //플레이어와 버튼이 충돌하고 있을 때
         //isTouchingButton = true;
         //이때 버튼 오브젝트 colider2D값을 trigger로 줘야함
-        isTouchingButton = Physics2D.Raycast(obj_player.GetComponent<Rigidbody2D>().position, Vector3.down, ButtonCheckDirection, LayerMask.GetMask("Button"));
+        isTouchingButton = Physics2D.Raycast(obj_player.GetComponent<Rigidbody2D>().position, Vector3.down, ButtonCheckDirection, LayerMask.GetMask("Trigger"));
 
         if (SetOn == true && isTouchingButton)
         {
